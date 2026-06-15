@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useBatteryStore } from '@/hooks/useBatteryStore'
 import { getRemainingDays, getBatteryStatus, getTypeLabel, getStatusLabel, getStatusColor, getAverageChargeCount, calculateRemainingLifePercent, getCycleLife, getChargeLevelLabel, getChargeLevelColor } from '@/utils/battery'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Search, Filter, Plus, MapPin, Calendar, Zap, ChevronRight, Trash2, BatteryCharging, RefreshCw } from 'lucide-react'
 import type { BatteryType, BatteryStatus } from '@/utils/battery'
 import { BATTERY_TYPE_INFO } from '@/utils/battery'
@@ -136,10 +136,30 @@ type StatusFilter = 'all' | BatteryStatus | 'disposed'
 export default function BatteryList() {
   const batteries = useBatteryStore((s) => s.batteries)
   const deleteBattery = useBatteryStore((s) => s.deleteBattery)
+  const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<BatteryType | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [showDisposed, setShowDisposed] = useState(false)
+
+  useEffect(() => {
+    const filterParam = searchParams.get('filter')
+    if (filterParam === 'disposed') {
+      setStatusFilter('disposed')
+      setShowDisposed(true)
+    }
+  }, [searchParams])
+
+  const handleStatusFilterChange = (filter: StatusFilter) => {
+    setStatusFilter(filter)
+    const shouldShowDisposed = filter === 'disposed'
+    setShowDisposed(shouldShowDisposed)
+    if (shouldShowDisposed) {
+      setSearchParams({ filter: 'disposed' })
+    } else {
+      setSearchParams({})
+    }
+  }
 
   const sortedBatteries = useMemo(() => {
     return [...batteries]
@@ -207,10 +227,7 @@ export default function BatteryList() {
         {statusTabs.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => {
-              setStatusFilter(tab.key)
-              setShowDisposed(tab.key === 'disposed')
-            }}
+            onClick={() => handleStatusFilterChange(tab.key)}
             className={`px-4 py-1.5 rounded-full text-xs font-medium transition-colors ${
               statusFilter === tab.key
                 ? tab.key === 'disposed'

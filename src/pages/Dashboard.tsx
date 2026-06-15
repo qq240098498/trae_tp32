@@ -155,7 +155,7 @@ export default function Dashboard() {
         </Link>
         {disposedBatteries.length > 0 && (
           <Link
-            to="/batteries"
+            to="/batteries?filter=disposed"
             className="flex items-center gap-2 px-6 py-3 rounded-xl border border-battery-border text-battery-muted font-medium hover:bg-battery-card transition-colors"
           >
             <Ban className="w-5 h-5" />
