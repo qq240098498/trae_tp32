@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useBatteryStore } from '@/hooks/useBatteryStore'
-import { BATTERY_TYPE_INFO, getDefaultShelfLife, calculateExpiryDate } from '@/utils/battery'
-import type { BatteryType } from '@/utils/battery'
-import { ArrowLeft, Camera, X, Check, Zap, BatteryPlus } from 'lucide-react'
+import { BATTERY_TYPE_INFO, getDefaultShelfLife, calculateExpiryDate, isRechargeableType, createDefaultCells } from '@/utils/battery'
+import type { BatteryType, ChargeLevel } from '@/utils/battery'
+import { ArrowLeft, Camera, X, Check, Zap, BatteryPlus, BatteryCharging, RefreshCw } from 'lucide-react'
 import Quagga from '@ericblade/quagga2'
 
 export default function ScanBattery() {
@@ -21,6 +21,9 @@ export default function ScanBattery() {
   const [shelfLifeYears, setShelfLifeYears] = useState(7)
   const [notes, setNotes] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [initialChargeLevel, setInitialChargeLevel] = useState<ChargeLevel>('full')
+
+  const isRechargeable = useMemo(() => isRechargeableType(type), [type])
 
   const startScanner = useCallback(() => {
     if (!videoRef.current) return
@@ -76,6 +79,11 @@ export default function ScanBattery() {
     e.preventDefault()
     if (!model.trim()) return
     const expiryDate = calculateExpiryDate(purchaseDate, shelfLifeYears)
+    const rechargeable = isRechargeableType(type)
+    let cells = rechargeable ? createDefaultCells(quantity) : []
+    if (rechargeable && initialChargeLevel !== 'full') {
+      cells = cells.map(c => ({ ...c, chargeLevel: initialChargeLevel }))
+    }
     addBattery({
       model: model.trim(),
       type,
@@ -85,6 +93,8 @@ export default function ScanBattery() {
       expiryDate,
       shelfLifeYears,
       notes: notes.trim(),
+      isRechargeable: rechargeable,
+      cells,
     })
     navigate('/batteries')
   }
@@ -300,6 +310,48 @@ export default function ScanBattery() {
               预计过期日期: <span className="text-battery-accent font-display font-bold">{calculateExpiryDate(purchaseDate, shelfLifeYears)}</span>
             </p>
           </div>
+
+          {isRechargeable && (
+            <div className="p-4 rounded-xl bg-battery-accent/10 border border-battery-accent/30 space-y-4">
+              <div className="flex items-center gap-2">
+                <BatteryCharging className="w-5 h-5 text-battery-accent" />
+                <div>
+                  <p className="text-sm font-medium text-battery-accent">充电电池设置</p>
+                  <p className="text-xs text-battery-muted">可在详情页中管理每节电池的充电记录</p>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-battery-muted mb-2 block flex items-center gap-2">
+                  <RefreshCw className="w-4 h-4" />
+                  初始电量状态
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { level: 'full' as ChargeLevel, label: '满电', color: '#27ae60' },
+                    { level: 'partial' as ChargeLevel, label: '部分', color: '#f39c12' },
+                    { level: 'empty' as ChargeLevel, label: '空电', color: '#e74c3c' },
+                  ]).map((opt) => (
+                    <button
+                      key={opt.level}
+                      type="button"
+                      onClick={() => setInitialChargeLevel(opt.level)}
+                      className={`px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${
+                        initialChargeLevel === opt.level
+                          ? 'text-white glow-accent'
+                          : 'bg-battery-card text-battery-muted border border-battery-border hover:border-battery-accent/30'
+                      }`}
+                      style={initialChargeLevel === opt.level ? { backgroundColor: opt.color } : {}}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="text-xs text-battery-muted">
+                共 {quantity} 节，每节充电次数初始为 0，预计循环寿命约 500 次
+              </p>
+            </div>
+          )}
 
           <div>
             <label className="text-sm font-medium text-battery-muted mb-2 block">备注</label>

@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useBatteryStore } from '@/hooks/useBatteryStore'
-import { getRemainingDays, getBatteryStatus, getTypeLabel, getStatusLabel, getStatusColor } from '@/utils/battery'
+import { getRemainingDays, getBatteryStatus, getTypeLabel, getStatusLabel, getStatusColor, getAverageChargeCount, calculateRemainingLifePercent, getCycleLife, getChargeLevelLabel, getChargeLevelColor } from '@/utils/battery'
 import { Link } from 'react-router-dom'
-import { Search, Filter, Plus, MapPin, Calendar, Zap, ChevronRight, Trash2 } from 'lucide-react'
+import { Search, Filter, Plus, MapPin, Calendar, Zap, ChevronRight, Trash2, BatteryCharging, RefreshCw } from 'lucide-react'
 import type { BatteryType, BatteryStatus } from '@/utils/battery'
 import { BATTERY_TYPE_INFO } from '@/utils/battery'
 
@@ -13,6 +13,17 @@ function BatteryCard({ battery, onDelete }: { battery: ReturnType<typeof useBatt
   const totalDays = battery.shelfLifeYears * 365
   const progress = Math.max(0, Math.min(100, ((totalDays - Math.max(0, remaining)) / totalDays) * 100))
 
+  const cycleLife = getCycleLife(battery.type)
+  const avgCharge = getAverageChargeCount(battery.cells || [])
+  const lifePercent = calculateRemainingLifePercent(avgCharge, cycleLife)
+
+  const chargeCounts = useMemo(() => {
+    if (!battery.cells || battery.cells.length === 0) return null
+    const counts = { full: 0, partial: 0, empty: 0 }
+    battery.cells.forEach(c => { counts[c.chargeLevel]++ })
+    return counts
+  }, [battery.cells])
+
   return (
     <Link
       to={`/batteries/${battery.id}`}
@@ -22,7 +33,7 @@ function BatteryCard({ battery, onDelete }: { battery: ReturnType<typeof useBatt
       <div className="p-5">
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h3 className="font-display font-bold text-lg truncate">{battery.model}</h3>
               <span
                 className="text-xs px-2 py-0.5 rounded-full shrink-0"
@@ -30,8 +41,27 @@ function BatteryCard({ battery, onDelete }: { battery: ReturnType<typeof useBatt
               >
                 {getStatusLabel(status)}
               </span>
+              {battery.isRechargeable && battery.cells && battery.cells.length > 0 && (
+                <span
+                  className="text-xs px-2 py-0.5 rounded-full shrink-0"
+                  style={{
+                    backgroundColor: lifePercent > 50 ? '#27ae6020' : lifePercent > 20 ? '#f39c1220' : '#e74c3c20',
+                    color: lifePercent > 50 ? '#27ae60' : lifePercent > 20 ? '#f39c12' : '#e74c3c'
+                  }}
+                >
+                  寿命 {Math.round(lifePercent)}%
+                </span>
+              )}
             </div>
-            <p className="text-sm text-battery-muted mt-1">{getTypeLabel(battery.type)}</p>
+            <p className="text-sm text-battery-muted mt-1">
+              {getTypeLabel(battery.type)}
+              {battery.isRechargeable && (
+                <span className="inline-flex items-center gap-0.5 ml-1.5 text-battery-accent">
+                  <BatteryCharging className="w-3 h-3 inline" />
+                  可充电
+                </span>
+              )}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 rounded-full flex items-center justify-center bg-battery-accent/15 text-battery-accent font-display font-bold text-sm">
@@ -49,6 +79,29 @@ function BatteryCard({ battery, onDelete }: { battery: ReturnType<typeof useBatt
             </button>
           </div>
         </div>
+
+        {chargeCounts && (
+          <div className="mt-3 flex items-center gap-3 text-xs">
+            <span className="flex items-center gap-1" style={{ color: getChargeLevelColor('full') }}>
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getChargeLevelColor('full') }} />
+              满电 {chargeCounts.full}
+            </span>
+            <span className="flex items-center gap-1" style={{ color: getChargeLevelColor('partial') }}>
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getChargeLevelColor('partial') }} />
+              部分 {chargeCounts.partial}
+            </span>
+            <span className="flex items-center gap-1" style={{ color: getChargeLevelColor('empty') }}>
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getChargeLevelColor('empty') }} />
+              空电 {chargeCounts.empty}
+            </span>
+            {avgCharge > 0 && (
+              <span className="ml-auto flex items-center gap-1 text-battery-muted">
+                <RefreshCw className="w-3 h-3" />
+                平均 {avgCharge} 次
+              </span>
+            )}
+          </div>
+        )}
 
         <div className="mt-4 h-1.5 rounded-full bg-battery-border overflow-hidden">
           <div
@@ -78,7 +131,7 @@ function BatteryCard({ battery, onDelete }: { battery: ReturnType<typeof useBatt
   )
 }
 
-type StatusFilter = 'all' | BatteryStatus
+type StatusFilter = 'all' | BatteryStatus | 'disposed'
 
 export default function BatteryList() {
   const batteries = useBatteryStore((s) => s.batteries)
@@ -86,6 +139,7 @@ export default function BatteryList() {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<BatteryType | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [showDisposed, setShowDisposed] = useState(false)
 
   const sortedBatteries = useMemo(() => {
     return [...batteries]
@@ -95,22 +149,31 @@ export default function BatteryList() {
         status: getBatteryStatus(getRemainingDays(b.expiryDate)),
       }))
       .filter((b) => {
+        if (statusFilter === 'disposed') {
+          if (!b.isDisposed) return false
+        } else if (!showDisposed) {
+          if (b.isDisposed) return false
+        }
         if (search) {
           const s = search.toLowerCase()
           if (!b.model.toLowerCase().includes(s) && !b.location.toLowerCase().includes(s) && !getTypeLabel(b.type).includes(s)) return false
         }
         if (typeFilter !== 'all' && b.type !== typeFilter) return false
-        if (statusFilter !== 'all' && b.status !== statusFilter) return false
+        if (statusFilter !== 'all' && statusFilter !== 'disposed' && b.status !== statusFilter) return false
         return true
       })
-      .sort((a, b) => a.remaining - b.remaining)
-  }, [batteries, search, typeFilter, statusFilter])
+      .sort((a, b) => {
+        if (a.isDisposed !== b.isDisposed) return a.isDisposed ? 1 : -1
+        return a.remaining - b.remaining
+      })
+  }, [batteries, search, typeFilter, statusFilter, showDisposed])
 
   const statusTabs: { key: StatusFilter; label: string }[] = [
     { key: 'all', label: '全部' },
     { key: 'normal', label: '正常' },
     { key: 'expiring', label: '即将过期' },
     { key: 'expired', label: '已过期' },
+    { key: 'disposed', label: '已报废' },
   ]
 
   return (
@@ -140,14 +203,19 @@ export default function BatteryList() {
         />
       </div>
 
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap items-center">
         {statusTabs.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setStatusFilter(tab.key)}
+            onClick={() => {
+              setStatusFilter(tab.key)
+              setShowDisposed(tab.key === 'disposed')
+            }}
             className={`px-4 py-1.5 rounded-full text-xs font-medium transition-colors ${
               statusFilter === tab.key
-                ? 'bg-battery-accent text-white'
+                ? tab.key === 'disposed'
+                  ? 'bg-battery-danger text-white'
+                  : 'bg-battery-accent text-white'
                 : 'bg-battery-card text-battery-muted hover:text-battery-text border border-battery-border'
             }`}
           >

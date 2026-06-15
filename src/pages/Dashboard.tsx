@@ -1,18 +1,22 @@
 import { useBatteryStore } from '@/hooks/useBatteryStore'
-import { getRemainingDays, getBatteryStatus, getTypeLabel, getStatusLabel } from '@/utils/battery'
+import { getRemainingDays, getBatteryStatus, getTypeLabel, getStatusLabel, getAverageChargeCount, calculateRemainingLifePercent, getCycleLife } from '@/utils/battery'
 import { Link } from 'react-router-dom'
-import { Battery, AlertTriangle, AlertCircle, Plus, ScanLine, ArrowRight, Zap } from 'lucide-react'
+import { Battery, AlertTriangle, AlertCircle, Plus, ScanLine, ArrowRight, Zap, BatteryCharging, Ban } from 'lucide-react'
 import type { Battery as BatteryType } from '@/utils/battery'
 
-function StatCard({ icon: Icon, label, value, color, glow }: {
+function StatCard({ icon: Icon, label, value, color, glow, onClick }: {
   icon: React.ElementType
   label: string
   value: number | string
   color: string
   glow?: string
+  onClick?: () => void
 }) {
   return (
-    <div className={`relative overflow-hidden rounded-2xl border border-battery-border bg-battery-card/80 p-5 transition-all duration-300 hover:scale-[1.02] ${glow ?? ''}`}>
+    <div
+      className={`relative overflow-hidden rounded-2xl border border-battery-border bg-battery-card/80 p-5 transition-all duration-300 hover:scale-[1.02] ${glow ?? ''} ${onClick ? 'cursor-pointer' : ''}`}
+      onClick={onClick}
+    >
       <div className="card-shine absolute inset-0 pointer-events-none" />
       <div className="flex items-center gap-4">
         <div className={`w-12 h-12 rounded-xl flex items-center justify-center`} style={{ backgroundColor: `${color}20` }}>
@@ -34,6 +38,10 @@ function ExpiringItem({ battery }: { battery: BatteryType }) {
   const totalDays = battery.shelfLifeYears * 365
   const progress = Math.max(0, Math.min(100, ((totalDays - remaining) / totalDays) * 100))
 
+  const cycleLife = getCycleLife(battery.type)
+  const avgCharge = getAverageChargeCount(battery.cells || [])
+  const lifePercent = calculateRemainingLifePercent(avgCharge, cycleLife)
+
   return (
     <Link
       to={`/batteries/${battery.id}`}
@@ -41,11 +49,23 @@ function ExpiringItem({ battery }: { battery: BatteryType }) {
       style={{ borderLeftColor: borderColor }}
     >
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="font-display font-bold text-sm truncate">{battery.model}</span>
           <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: `${borderColor}20`, color: borderColor }}>
             {getStatusLabel(status)}
           </span>
+          {battery.isRechargeable && (
+            <span
+              className="text-xs px-2 py-0.5 rounded-full"
+              style={{
+                backgroundColor: lifePercent > 50 ? '#27ae6020' : lifePercent > 20 ? '#f39c1220' : '#e74c3c20',
+                color: lifePercent > 50 ? '#27ae60' : lifePercent > 20 ? '#f39c12' : '#e74c3c'
+              }}
+            >
+              <BatteryCharging className="w-3 h-3 inline mr-0.5" />
+              寿命 {Math.round(lifePercent)}%
+            </span>
+          )}
         </div>
         <p className="text-xs text-battery-muted mt-1">
           {getTypeLabel(battery.type)} · {battery.location} · {battery.quantity}节
@@ -70,16 +90,27 @@ function ExpiringItem({ battery }: { battery: BatteryType }) {
 export default function Dashboard() {
   const batteries = useBatteryStore((s) => s.batteries)
 
-  const totalCount = batteries.reduce((acc, b) => acc + b.quantity, 0)
-  const expiringBatteries = batteries.filter((b) => {
+  const activeBatteries = batteries.filter(b => !b.isDisposed)
+  const disposedBatteries = batteries.filter(b => b.isDisposed)
+  const rechargeableBatteries = activeBatteries.filter(b => b.isRechargeable)
+
+  const totalCount = activeBatteries.reduce((acc, b) => acc + b.quantity, 0)
+  const expiringBatteries = activeBatteries.filter((b) => {
     const remaining = getRemainingDays(b.expiryDate)
     return remaining > 0 && remaining <= 30
   })
-  const expiredBatteries = batteries.filter((b) => getRemainingDays(b.expiryDate) <= 0)
+  const expiredBatteries = activeBatteries.filter((b) => getRemainingDays(b.expiryDate) <= 0)
   const alertBatteries = [...expiredBatteries, ...expiringBatteries]
     .sort((a, b) => getRemainingDays(a.expiryDate) - getRemainingDays(b.expiryDate))
 
-  const typeCount = new Set(batteries.map((b) => b.type)).size
+  const typeCount = new Set(activeBatteries.map((b) => b.type)).size
+
+  const lowLifeBatteries = rechargeableBatteries.filter(b => {
+    const cycleLife = getCycleLife(b.type)
+    const avgCharge = getAverageChargeCount(b.cells || [])
+    const lifePercent = calculateRemainingLifePercent(avgCharge, cycleLife)
+    return lifePercent <= 20
+  })
 
   return (
     <div className="space-y-8 pb-20 md:pb-0">
@@ -97,7 +128,17 @@ export default function Dashboard() {
         <StatCard icon={AlertCircle} label="已过期" value={expiredBatteries.length} color="#e74c3c" glow="animate-pulse-slow" />
       </div>
 
-      <div className="flex gap-3">
+      {(rechargeableBatteries.length > 0 || disposedBatteries.length > 0) && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard icon={BatteryCharging} label="充电电池" value={`${rechargeableBatteries.length} 组`} color="#3498db" />
+          <StatCard icon={Ban} label="已报废" value={disposedBatteries.length} color="#95a5a6" />
+          {lowLifeBatteries.length > 0 && (
+            <StatCard icon={AlertTriangle} label="低寿命电池" value={lowLifeBatteries.length} color="#e67e22" glow="animate-pulse-slow" />
+          )}
+        </div>
+      )}
+
+      <div className="flex gap-3 flex-wrap">
         <Link
           to="/batteries/add"
           className="flex items-center gap-2 px-6 py-3 rounded-xl bg-battery-accent text-white font-medium hover:bg-battery-accentHover transition-colors glow-accent"
@@ -112,6 +153,15 @@ export default function Dashboard() {
           <ScanLine className="w-5 h-5" />
           扫码录入
         </Link>
+        {disposedBatteries.length > 0 && (
+          <Link
+            to="/batteries"
+            className="flex items-center gap-2 px-6 py-3 rounded-xl border border-battery-border text-battery-muted font-medium hover:bg-battery-card transition-colors"
+          >
+            <Ban className="w-5 h-5" />
+            查看报废
+          </Link>
+        )}
       </div>
 
       {alertBatteries.length > 0 && (
@@ -127,6 +177,25 @@ export default function Dashboard() {
           </div>
           <div className="space-y-2">
             {alertBatteries.slice(0, 5).map((b) => (
+              <ExpiringItem key={b.id} battery={b} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {lowLifeBatteries.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display font-bold text-lg flex items-center gap-2">
+              <BatteryCharging className="w-5 h-5 text-battery-warning" />
+              充电电池寿命提醒
+            </h2>
+            <Link to="/batteries" className="text-sm text-battery-accent flex items-center gap-1 hover:underline">
+              查看全部 <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {lowLifeBatteries.slice(0, 5).map((b) => (
               <ExpiringItem key={b.id} battery={b} />
             ))}
           </div>

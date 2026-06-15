@@ -12,6 +12,14 @@ export type BatteryType =
 
 export type BatteryStatus = 'expired' | 'expiring' | 'normal'
 
+export type ChargeLevel = 'full' | 'partial' | 'empty'
+
+export type BatteryCell = {
+  id: string
+  chargeLevel: ChargeLevel
+  chargeCount: number
+}
+
 export interface Battery {
   id: string
   model: string
@@ -24,26 +32,42 @@ export interface Battery {
   notes: string
   createdAt: string
   updatedAt: string
+  isRechargeable: boolean
+  cells: BatteryCell[]
+  isDisposed: boolean
+  disposedAt?: string
 }
 
 export interface BatteryTypeInfo {
   type: BatteryType
   label: string
   defaultShelfLifeYears: number
+  rechargeable: boolean
+  cycleLife: number
 }
 
+export const DEFAULT_LITHIUM_CYCLE_LIFE = 500
+
 export const BATTERY_TYPE_INFO: BatteryTypeInfo[] = [
-  { type: 'aa', label: '5号电池(AA)', defaultShelfLifeYears: 7 },
-  { type: 'aaa', label: '7号电池(AAA)', defaultShelfLifeYears: 7 },
-  { type: 'button', label: '纽扣电池', defaultShelfLifeYears: 5 },
-  { type: 'rechargeable_aa', label: '5号充电电池', defaultShelfLifeYears: 5 },
-  { type: 'rechargeable_aaa', label: '7号充电电池', defaultShelfLifeYears: 5 },
-  { type: '9v', label: '9V电池', defaultShelfLifeYears: 5 },
-  { type: 'c', label: 'C型电池', defaultShelfLifeYears: 7 },
-  { type: 'd', label: 'D型电池', defaultShelfLifeYears: 7 },
-  { type: 'lithium', label: '锂电池', defaultShelfLifeYears: 10 },
-  { type: 'other', label: '其他', defaultShelfLifeYears: 5 },
+  { type: 'aa', label: '5号电池(AA)', defaultShelfLifeYears: 7, rechargeable: false, cycleLife: 0 },
+  { type: 'aaa', label: '7号电池(AAA)', defaultShelfLifeYears: 7, rechargeable: false, cycleLife: 0 },
+  { type: 'button', label: '纽扣电池', defaultShelfLifeYears: 5, rechargeable: false, cycleLife: 0 },
+  { type: 'rechargeable_aa', label: '5号充电电池', defaultShelfLifeYears: 5, rechargeable: true, cycleLife: DEFAULT_LITHIUM_CYCLE_LIFE },
+  { type: 'rechargeable_aaa', label: '7号充电电池', defaultShelfLifeYears: 5, rechargeable: true, cycleLife: DEFAULT_LITHIUM_CYCLE_LIFE },
+  { type: '9v', label: '9V电池', defaultShelfLifeYears: 5, rechargeable: false, cycleLife: 0 },
+  { type: 'c', label: 'C型电池', defaultShelfLifeYears: 7, rechargeable: false, cycleLife: 0 },
+  { type: 'd', label: 'D型电池', defaultShelfLifeYears: 7, rechargeable: false, cycleLife: 0 },
+  { type: 'lithium', label: '锂电池', defaultShelfLifeYears: 10, rechargeable: true, cycleLife: DEFAULT_LITHIUM_CYCLE_LIFE },
+  { type: 'other', label: '其他', defaultShelfLifeYears: 5, rechargeable: false, cycleLife: 0 },
 ]
+
+export function isRechargeableType(type: BatteryType): boolean {
+  return BATTERY_TYPE_INFO.find(t => t.type === type)?.rechargeable ?? false
+}
+
+export function getCycleLife(type: BatteryType): number {
+  return BATTERY_TYPE_INFO.find(t => t.type === type)?.cycleLife ?? 0
+}
 
 export function getTypeLabel(type: BatteryType): string {
   return BATTERY_TYPE_INFO.find(t => t.type === type)?.label ?? type
@@ -51,6 +75,53 @@ export function getTypeLabel(type: BatteryType): string {
 
 export function getDefaultShelfLife(type: BatteryType): number {
   return BATTERY_TYPE_INFO.find(t => t.type === type)?.defaultShelfLifeYears ?? 5
+}
+
+export function getChargeLevelLabel(level: ChargeLevel): string {
+  switch (level) {
+    case 'full': return '满电'
+    case 'partial': return '部分'
+    case 'empty': return '空电'
+  }
+}
+
+export function getChargeLevelColor(level: ChargeLevel): string {
+  switch (level) {
+    case 'full': return '#27ae60'
+    case 'partial': return '#f39c12'
+    case 'empty': return '#e74c3c'
+  }
+}
+
+export function calculateRemainingLifePercent(chargeCount: number, cycleLife: number): number {
+  if (cycleLife <= 0) return 100
+  return Math.max(0, Math.min(100, ((cycleLife - chargeCount) / cycleLife) * 100))
+}
+
+export function getRemainingLifeLabel(percent: number): string {
+  if (percent >= 80) return '优秀'
+  if (percent >= 50) return '良好'
+  if (percent >= 20) return '一般'
+  if (percent > 0) return '较差'
+  return '建议报废'
+}
+
+export function createDefaultCells(quantity: number): BatteryCell[] {
+  const cells: BatteryCell[] = []
+  for (let i = 0; i < quantity; i++) {
+    cells.push({
+      id: generateId(),
+      chargeLevel: 'full',
+      chargeCount: 0,
+    })
+  }
+  return cells
+}
+
+export function getAverageChargeCount(cells: BatteryCell[]): number {
+  if (cells.length === 0) return 0
+  const total = cells.reduce((sum, c) => sum + c.chargeCount, 0)
+  return Math.round(total / cells.length)
 }
 
 export function getRemainingDays(expiryDate: string): number {
