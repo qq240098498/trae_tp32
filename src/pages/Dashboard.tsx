@@ -1,7 +1,7 @@
 import { useBatteryStore } from '@/hooks/useBatteryStore'
 import { getRemainingDays, getBatteryStatus, getTypeLabel, getStatusLabel, getAverageChargeCount, calculateRemainingLifePercent, getCycleLife } from '@/utils/battery'
 import { Link } from 'react-router-dom'
-import { Battery, AlertTriangle, AlertCircle, Plus, ScanLine, ArrowRight, Zap, BatteryCharging, Ban, Plug } from 'lucide-react'
+import { Battery, AlertTriangle, AlertCircle, Plus, ScanLine, ArrowRight, Zap, BatteryCharging, Ban, Plug, MapPin } from 'lucide-react'
 import type { Battery as BatteryType } from '@/utils/battery'
 
 function StatCard({ icon: Icon, label, value, color, glow, onClick }: {

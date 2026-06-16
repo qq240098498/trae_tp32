@@ -3,7 +3,7 @@ import { useBatteryStore } from '@/hooks/useBatteryStore'
 import { getTypeLabel, BATTERY_TYPE_INFO } from '@/utils/battery'
 import type { BatteryType, AppliancePairing } from '@/utils/battery'
 import { Link } from 'react-router-dom'
-import { Search, Plus, Trash2, Edit3, Zap, Package, FileText } from 'lucide-react'
+import { Search, Plus, Trash2, Edit3, Zap, Package, FileText, MapPin } from 'lucide-react'
 
 function PairingCard({
   pairing,
@@ -20,6 +20,12 @@ function PairingCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="font-display font-bold text-lg truncate">{pairing.applianceName}</h3>
+              {pairing.location && (
+                <span className="text-xs px-2 py-0.5 rounded-full shrink-0 bg-battery-blue/20 text-battery-blue">
+                  <MapPin className="w-3 h-3 inline mr-0.5" />
+                  {pairing.location}
+                </span>
+              )}
               <span className="text-xs px-2 py-0.5 rounded-full shrink-0 bg-battery-accent/15 text-battery-accent">
                 {pairing.quantity}节{pairing.batteryModel || getTypeLabel(pairing.batteryType)}
               </span>
@@ -79,6 +85,17 @@ export default function AppliancePairingList() {
   const deleteAppliancePairing = useBatteryStore((s) => s.deleteAppliancePairing)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<BatteryType | 'all'>('all')
+  const [locationFilter, setLocationFilter] = useState<string>('all')
+
+  const uniqueLocations = useMemo(() => {
+    const set = new Set<string>()
+    pairings.forEach((p) => {
+      if (p.location && p.location.trim()) {
+        set.add(p.location.trim())
+      }
+    })
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'zh-CN'))
+  }, [pairings])
 
   const filteredPairings = useMemo(() => {
     return [...pairings]
@@ -89,13 +106,15 @@ export default function AppliancePairingList() {
           const matchModel = p.batteryModel.toLowerCase().includes(s)
           const matchNotes = p.notes.toLowerCase().includes(s)
           const matchType = getTypeLabel(p.batteryType).includes(s)
-          if (!matchName && !matchModel && !matchNotes && !matchType) return false
+          const matchLocation = p.location.toLowerCase().includes(s)
+          if (!matchName && !matchModel && !matchNotes && !matchType && !matchLocation) return false
         }
         if (typeFilter !== 'all' && p.batteryType !== typeFilter) return false
+        if (locationFilter !== 'all' && p.location !== locationFilter) return false
         return true
       })
       .sort((a, b) => a.applianceName.localeCompare(b.applianceName, 'zh-CN'))
-  }, [pairings, search, typeFilter])
+  }, [pairings, search, typeFilter, locationFilter])
 
   return (
     <div className="space-y-6 pb-20 md:pb-0">
@@ -117,7 +136,7 @@ export default function AppliancePairingList() {
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-battery-muted" />
         <input
           type="text"
-          placeholder="搜索电器名称、电池型号..."
+          placeholder="搜索电器名称、房间、电池型号..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full pl-11 pr-4 py-3 rounded-xl bg-battery-card border border-battery-border text-sm text-battery-text placeholder-battery-muted focus:outline-none focus:border-battery-accent/50 transition-colors"
@@ -149,6 +168,38 @@ export default function AppliancePairingList() {
           </button>
         ))}
       </div>
+
+      {uniqueLocations.length > 0 && (
+        <div className="flex gap-2 flex-wrap items-center">
+          <span className="text-xs text-battery-muted mr-1 flex items-center gap-1">
+            <MapPin className="w-3 h-3" />
+            房间:
+          </span>
+          <button
+            onClick={() => setLocationFilter('all')}
+            className={`px-3 py-1 rounded-lg text-xs transition-colors ${
+              locationFilter === 'all'
+                ? 'bg-[#9b59b6] text-white'
+                : 'bg-battery-card text-battery-muted border border-battery-border'
+            }`}
+          >
+            全部
+          </button>
+          {uniqueLocations.map((loc) => (
+            <button
+              key={loc}
+              onClick={() => setLocationFilter(loc)}
+              className={`px-3 py-1 rounded-lg text-xs transition-colors ${
+                locationFilter === loc
+                  ? 'bg-[#9b59b6] text-white'
+                  : 'bg-battery-card text-battery-muted border border-battery-border'
+              }`}
+            >
+              {loc}
+            </button>
+          ))}
+        </div>
+      )}
 
       {filteredPairings.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

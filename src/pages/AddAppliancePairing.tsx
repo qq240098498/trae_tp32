@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useBatteryStore } from '@/hooks/useBatteryStore'
 import { BATTERY_TYPE_INFO, getTypeLabel } from '@/utils/battery'
 import type { BatteryType } from '@/utils/battery'
-import { ArrowLeft, Save, Zap, Hash, FileText, Tv } from 'lucide-react'
+import { ArrowLeft, Save, Zap, Hash, FileText, Tv, MapPin } from 'lucide-react'
 
 export default function AddAppliancePairing() {
   const navigate = useNavigate()
@@ -16,6 +16,7 @@ export default function AddAppliancePairing() {
   const existingPairing = id ? pairings.find((p) => p.id === id) : null
 
   const [applianceName, setApplianceName] = useState('')
+  const [location, setLocation] = useState('')
   const [batteryType, setBatteryType] = useState<BatteryType>('aa')
   const [batteryModel, setBatteryModel] = useState('')
   const [quantity, setQuantity] = useState(2)
@@ -24,6 +25,7 @@ export default function AddAppliancePairing() {
   useEffect(() => {
     if (existingPairing) {
       setApplianceName(existingPairing.applianceName)
+      setLocation(existingPairing.location || '')
       setBatteryType(existingPairing.batteryType)
       setBatteryModel(existingPairing.batteryModel)
       setQuantity(existingPairing.quantity)
@@ -38,6 +40,7 @@ export default function AddAppliancePairing() {
     if (isEditing && id) {
       updateAppliancePairing(id, {
         applianceName: applianceName.trim(),
+        location: location.trim(),
         batteryType,
         batteryModel: batteryModel.trim(),
         quantity,
@@ -46,6 +49,7 @@ export default function AddAppliancePairing() {
     } else {
       addAppliancePairing({
         applianceName: applianceName.trim(),
+        location: location.trim(),
         batteryType,
         batteryModel: batteryModel.trim(),
         quantity,
@@ -86,6 +90,20 @@ export default function AddAppliancePairing() {
             value={applianceName}
             onChange={(e) => setApplianceName(e.target.value)}
             placeholder="例如: 电视遥控器、体重秤、空调遥控器"
+            className="w-full px-4 py-3 rounded-xl bg-battery-card border border-battery-border text-sm text-battery-text placeholder-battery-muted/50 focus:outline-none focus:border-battery-accent/50 transition-colors"
+          />
+        </div>
+
+        <div>
+          <label className="flex items-center gap-2 text-sm font-medium text-battery-muted mb-2">
+            <MapPin className="w-4 h-4" />
+            所在房间
+          </label>
+          <input
+            type="text"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="例如: 客厅、卧室、厨房、书房"
             className="w-full px-4 py-3 rounded-xl bg-battery-card border border-battery-border text-sm text-battery-text placeholder-battery-muted/50 focus:outline-none focus:border-battery-accent/50 transition-colors"
           />
         </div>
@@ -154,6 +172,9 @@ export default function AddAppliancePairing() {
           </p>
           <p className="text-sm text-battery-text mt-1">
             <span className="font-display font-bold">{applianceName || '电器名称'}</span>
+            {location && (
+              <span className="text-battery-muted ml-1">({location})</span>
+            )}
             {' — '}
             <span className="text-battery-accent">{quantity}节</span>
             {' '}

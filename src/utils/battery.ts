@@ -23,6 +23,7 @@ export type BatteryCell = {
 export interface AppliancePairing {
   id: string
   applianceName: string
+  location: string
   batteryType: BatteryType
   batteryModel: string
   quantity: number
