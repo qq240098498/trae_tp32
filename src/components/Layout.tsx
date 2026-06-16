@@ -1,9 +1,10 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { LayoutDashboard, BatteryPlus, List, ScanLine } from 'lucide-react'
+import { LayoutDashboard, BatteryPlus, List, ScanLine, Plug } from 'lucide-react'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: '仪表盘' },
   { to: '/batteries', icon: List, label: '电池列表' },
+  { to: '/appliance-pairings', icon: Plug, label: '电器配对' },
   { to: '/batteries/add', icon: BatteryPlus, label: '添加电池' },
   { to: '/scan', icon: ScanLine, label: '扫码录入' },
 ]

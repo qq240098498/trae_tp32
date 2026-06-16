@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Battery, ChargeLevel, BatteryCell } from '@/utils/battery'
+import type { Battery, ChargeLevel, BatteryCell, AppliancePairing } from '@/utils/battery'
 import { generateId, isRechargeableType, createDefaultCells } from '@/utils/battery'
 
 interface BatteryStore {
@@ -13,12 +13,17 @@ interface BatteryStore {
   incrementCellChargeCount: (batteryId: string, cellId: string) => void
   incrementAllChargeCounts: (batteryId: string) => void
   setAllCellsChargeLevel: (batteryId: string, level: ChargeLevel) => void
+  appliancePairings: AppliancePairing[]
+  addAppliancePairing: (pairing: Omit<AppliancePairing, 'id' | 'createdAt' | 'updatedAt'>) => void
+  updateAppliancePairing: (id: string, updates: Partial<AppliancePairing>) => void
+  deleteAppliancePairing: (id: string) => void
 }
 
 export const useBatteryStore = create<BatteryStore>()(
   persist(
     (set) => ({
       batteries: [],
+      appliancePairings: [],
       addBattery: (battery) => {
         const now = new Date().toISOString()
         const rechargeable = battery.isRechargeable ?? isRechargeableType(battery.type)
@@ -111,6 +116,32 @@ export const useBatteryStore = create<BatteryStore>()(
                 }
               : b
           ),
+        }))
+      },
+      addAppliancePairing: (pairing) => {
+        const now = new Date().toISOString()
+        set((state) => ({
+          appliancePairings: [
+            ...state.appliancePairings,
+            {
+              ...pairing,
+              id: generateId(),
+              createdAt: now,
+              updatedAt: now,
+            },
+          ],
+        }))
+      },
+      updateAppliancePairing: (id, updates) => {
+        set((state) => ({
+          appliancePairings: state.appliancePairings.map((p) =>
+            p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p
+          ),
+        }))
+      },
+      deleteAppliancePairing: (id) => {
+        set((state) => ({
+          appliancePairings: state.appliancePairings.filter((p) => p.id !== id),
         }))
       },
     }),

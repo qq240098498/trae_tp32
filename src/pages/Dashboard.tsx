@@ -1,7 +1,7 @@
 import { useBatteryStore } from '@/hooks/useBatteryStore'
 import { getRemainingDays, getBatteryStatus, getTypeLabel, getStatusLabel, getAverageChargeCount, calculateRemainingLifePercent, getCycleLife } from '@/utils/battery'
 import { Link } from 'react-router-dom'
-import { Battery, AlertTriangle, AlertCircle, Plus, ScanLine, ArrowRight, Zap, BatteryCharging, Ban } from 'lucide-react'
+import { Battery, AlertTriangle, AlertCircle, Plus, ScanLine, ArrowRight, Zap, BatteryCharging, Ban, Plug } from 'lucide-react'
 import type { Battery as BatteryType } from '@/utils/battery'
 
 function StatCard({ icon: Icon, label, value, color, glow, onClick }: {
@@ -89,6 +89,7 @@ function ExpiringItem({ battery }: { battery: BatteryType }) {
 
 export default function Dashboard() {
   const batteries = useBatteryStore((s) => s.batteries)
+  const appliancePairings = useBatteryStore((s) => s.appliancePairings)
 
   const activeBatteries = batteries.filter(b => !b.isDisposed)
   const disposedBatteries = batteries.filter(b => b.isDisposed)
@@ -128,12 +129,21 @@ export default function Dashboard() {
         <StatCard icon={AlertCircle} label="已过期" value={expiredBatteries.length} color="#e74c3c" glow="animate-pulse-slow" />
       </div>
 
-      {(rechargeableBatteries.length > 0 || disposedBatteries.length > 0) && (
+      {(rechargeableBatteries.length > 0 || disposedBatteries.length > 0 || appliancePairings.length > 0) && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={BatteryCharging} label="充电电池" value={`${rechargeableBatteries.length} 组`} color="#3498db" />
           <StatCard icon={Ban} label="已报废" value={disposedBatteries.length} color="#95a5a6" />
           {lowLifeBatteries.length > 0 && (
             <StatCard icon={AlertTriangle} label="低寿命电池" value={lowLifeBatteries.length} color="#e67e22" glow="animate-pulse-slow" />
+          )}
+          {appliancePairings.length > 0 && (
+            <StatCard
+              icon={Plug}
+              label="电器配对"
+              value={appliancePairings.length}
+              color="#9b59b6"
+              onClick={() => window.location.href = '/appliance-pairings'}
+            />
           )}
         </div>
       )}
@@ -152,6 +162,13 @@ export default function Dashboard() {
         >
           <ScanLine className="w-5 h-5" />
           扫码录入
+        </Link>
+        <Link
+          to="/appliance-pairings/add"
+          className="flex items-center gap-2 px-6 py-3 rounded-xl border border-[#9b59b6] text-[#9b59b6] font-medium hover:bg-[#9b59b6]/10 transition-colors"
+        >
+          <Plug className="w-5 h-5" />
+          添加配对
         </Link>
         {disposedBatteries.length > 0 && (
           <Link
@@ -202,7 +219,48 @@ export default function Dashboard() {
         </div>
       )}
 
-      {batteries.length === 0 && (
+      {appliancePairings.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display font-bold text-lg flex items-center gap-2">
+              <Plug className="w-5 h-5 text-[#9b59b6]" />
+              电器-电池配对
+            </h2>
+            <Link to="/appliance-pairings" className="text-sm text-battery-accent flex items-center gap-1 hover:underline">
+              查看全部 <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {appliancePairings.slice(0, 5).map((p) => (
+              <Link
+                key={p.id}
+                to={`/appliance-pairings/edit/${p.id}`}
+                className="flex items-center gap-4 p-4 rounded-xl bg-battery-card/50 hover:bg-battery-card transition-colors border-l-4 border-[#9b59b6]"
+              >
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-[#9b59b6]/20 text-[#9b59b6] shrink-0">
+                  <Plug className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-display font-bold text-sm truncate">{p.applianceName}</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-battery-accent/15 text-battery-accent">
+                      {p.quantity}节{p.batteryModel || getTypeLabel(p.batteryType)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-battery-muted mt-0.5">
+                    {getTypeLabel(p.batteryType)}{p.batteryModel ? ` · ${p.batteryModel}` : ''}
+                  </p>
+                </div>
+                <div className="text-xs text-battery-muted shrink-0">
+                  换电池时查看
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {batteries.length === 0 && appliancePairings.length === 0 && (
         <div className="text-center py-16">
           <div className="w-20 h-20 mx-auto rounded-2xl bg-battery-card flex items-center justify-center mb-4">
             <Battery className="w-10 h-10 text-battery-muted" />
