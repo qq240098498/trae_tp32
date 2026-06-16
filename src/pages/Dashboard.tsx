@@ -241,8 +241,14 @@ export default function Dashboard() {
                   <Plug className="w-5 h-5" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-display font-bold text-sm truncate">{p.applianceName}</span>
+                    {p.location && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-battery-blue/20 text-battery-blue">
+                        <MapPin className="w-3 h-3 inline mr-0.5" />
+                        {p.location}
+                      </span>
+                    )}
                     <span className="text-xs px-2 py-0.5 rounded-full bg-battery-accent/15 text-battery-accent">
                       {p.quantity}节{p.batteryModel || getTypeLabel(p.batteryType)}
                     </span>
